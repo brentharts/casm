@@ -31,6 +31,7 @@ def decomp(o):
 			print(asm[-1])
 		elif ':' in ln:
 			if ln.startswith('./') and 'file format' in ln: continue
+			if '--verbose' in sys.argv: asm.append('#'+ln)
 			a = ln[ ln.index(':')+1 : ].strip().split()[1:]
 			print(a)
 			a = ' '.join(a)
@@ -91,6 +92,27 @@ def print_regs(register_usage):
 				for asm in registers[reg]['asm']:
 					print('		: %s' %(asm))
 
+def asm2json(asm):
+	bareasm = None
+	out = {'labels':{}, 'data':[]}
+	lab = None
+	for idx, ln in enumerate(asm):
+		a = guaca.parse_asm(ln, term_colors=False)
+		if 'label' in a:
+			lab = a['label']
+			out['labels'][lab] = []
+		elif 'data' in a:
+			out['data'].append(a)
+		else:
+			if lab:
+				out['labels'][lab].append(a)
+			else:
+				if bareasm is None:
+					bareasm = lab = '__bareasm__'
+					out['labels'][lab] = []
+				out['labels'][lab].append(a)
+	return out
+
 def mklinux():
 	## https://risc-v-getting-started-guide.readthedocs.io/en/latest/linux-qemu.html
 	if not os.path.isfile('/usr/bin/riscv64-linux-gnu-gcc'):
@@ -115,6 +137,8 @@ def mklinux():
 	info = decomp( './linux/virt/kvm/kvm_main.o' )
 	print_regs(info['sections'])
 	guaca.print_asm( '\n'.join(info['asm']) )
+	d = asm2json(info['asm'])
+	#print(d)
 
 if __name__ == '__main__':
 	out = None
