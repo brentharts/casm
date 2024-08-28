@@ -261,6 +261,40 @@ def mklinux():
 		for a in trace[k]:
 			print('\t#', a)
 
+CAPSICUM_H = '''
+#define CAPABILITIES
+#define CAPABILITY_MODE
+//#include "bsd_kernel.h"
+typedef int (driver_filter_t)(void *arg);
+#include "vm/vm_extern.h"
+'''
+
+KTRACE_H = '''
+#define	panic(...) do { printf("USB PANIC: " __VA_ARGS__); while (1) ; } while (0)
+
+'''
+
+def c2o(file, out='/tmp/c2o.o', includes=None, defines=None, opt='-O0' ):
+	cmd = [
+		guaca.GCC, '-mcmodel=medany', '-fomit-frame-pointer', '-ffunction-sections',
+		'-ffreestanding', '-nostdlib', '-nostartfiles', '-nodefaultlibs', '-fno-tree-loop-distribute-patterns', 
+		#'-fno-optimize-register-move', '-fno-sched-pressure', '-fno-sched-interblock',
+		'-ffixed-t0', '-ffixed-t1', '-ffixed-t2', '-ffixed-t3', '-ffixed-t4', '-ffixed-t5', '-ffixed-t6',
+		opt, '-g', '-o', out, file
+	]
+	if includes:
+		for inc in includes:
+			if not inc.startswith('-I'): inc = '-I'+inc
+			cmd.append(inc)
+	if defines:
+		for d in defines:
+			if not d.startswith('-D'): d = '-D'+d
+			cmd.append(d)
+	
+	print(cmd)
+	subprocess.check_call(cmd)
+	return out
+
 def mkbsd():
 	if not os.path.isdir('ghostbsd-src'):
 		cmd = 'git clone --depth 1 https://github.com/ghostbsd/ghostbsd-src.git'.split()
@@ -269,21 +303,28 @@ def mkbsd():
 	includes = [
 		'./ghostbsd-src/include', 
 		'./ghostbsd-src/sys/riscv/include', 
-		'./ghostbsd-src/tools/build/cross-build/include/common',
-		#'./ghostbsd-src/sys',        ## sys/param.h
+		#'./ghostbsd-src/tools/build/cross-build/include/common',
+		'./ghostbsd-src/sys',        ## sys/param.h sys/systm.h
 		#'./ghostbsd-src/sys/riscv/include',  ## machine/_types.h
 		'./ghostbsd-src/tools/build/cross-build/include/common/sys',
+		'./ghostbsd-src/stand/kshim',
 	]
 	defines = [
 		'_KERNEL',
-		'LOCORE',
+		#'LOCORE',       ## #error "no assembler-serviceable parts inside" sys/sys/pcpu.h
+		#'_STANDALONE',  ## required for bsd_kernel.h
 	]
-
 
 	# fatal error: opt_ddb.h: No such file or directory
 	# see ghostbsd-src/sys/modules/dcons/Makefile
 	open('/tmp/opt_ddb.h','w').write('#define DDB 1')
 	open('/tmp/opt_kdb.h','w').write('#define KDB 1')
+	# ghostbsd-src/sys/riscv/confg/GENERIC
+	# ghostbsd-src/sys/conf/options
+	open('/tmp/opt_capsicum.h','w').write(CAPSICUM_H)
+	open('/tmp/opt_ktrace.h','w').write('#define KTRACE_REQUEST_POOL')
+	# see: ./ghostbsd-src/sys/conf/kern.post.mk
+	#offset.inc: $S/kern/genoffset.sh genoffset.o
 	includes.append('/tmp')
 
 	if not os.path.isdir('/tmp/sys'):
@@ -291,11 +332,18 @@ def mkbsd():
 	if not os.path.isdir('/tmp/machine'):
 		os.mkdir('/tmp/machine')
 	os.system('ls -lh ./ghostbsd-src/sys/riscv/include/')
-	os.system('cp -v ./ghostbsd-src/sys/riscv/include/param.h /tmp/sys/.')
-	os.system('cp -v ./ghostbsd-src/sys/riscv/include/_align.h /tmp/machine/.')
+	os.system('cp -v ./ghostbsd-src/sys/riscv/include/param.h /tmp/sys/.')  ## TODO why is param in both places?
+	#for h in '_align.h _types.h _limits.h signal.h param.h atomic.h cpufunc.h _bus.h'.split():
+	for h in os.listdir('./ghostbsd-src/sys/riscv/include/'):
+		assert h.endswith('.h')
+		os.system('cp -v ./ghostbsd-src/sys/riscv/include/%s /tmp/machine/.' % h)
+
+	genoffsetc = './ghostbsd-src/sys/kern/genoffset.c'
+	geno = c2o(genoffsetc, includes=includes, defines=defines)
+	subprocess.check_call(['bash', './ghostbsd-src/sys/kern/genoffset.sh', '-o', '/tmp/offset.inc', geno])
 
 	trapc = './ghostbsd-src/sys/riscv/riscv/trap.c'
-	asm = guaca.c2asm(open(trapc).read(), {}, [], includes=includes )
+	asm = guaca.c2asm(open(trapc).read(), {}, [], includes=includes, defines=defines )
 	guaca.print_asm(asm)
 
 if __name__ == '__main__':
