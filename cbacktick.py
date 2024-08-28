@@ -342,9 +342,16 @@ def mkbsd():
 	geno = c2o(genoffsetc, includes=includes, defines=defines)
 	subprocess.check_call(['bash', './ghostbsd-src/sys/kern/genoffset.sh', '-o', '/tmp/offset.inc', geno])
 
+	## TODO
+	open('/tmp/device_if.h','w').write('')
+	open('/tmp/bus_if.h','w').write('')
+
 	trapc = './ghostbsd-src/sys/riscv/riscv/trap.c'
 	asm = guaca.c2asm(open(trapc).read(), {}, [], includes=includes, defines=defines )
 	guaca.print_asm(asm)
+
+	ctx_switch = './ghostbsd-src/sys/riscv/riscv/swtch.S'
+	guaca.print_asm(ctx_switch)
 
 if __name__ == '__main__':
 	out = None
