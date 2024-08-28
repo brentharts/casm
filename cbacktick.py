@@ -138,11 +138,30 @@ void _start(int argc, char **argv) {
 }
 '''
 
+def parse_linux_config(cfg):
+	p = {}
+	for ln in cfg.splitlines():
+		if ln.startswith('#') or not ln.strip(): continue
+		assert '=' in ln
+		key   = ln[ : ln.index('=') ]
+		value = ln[ ln.index('=')+1 : ]
+		p[key] = value
+	return p
 
+def parse_linux_not_config(cfg):
+	p = {}
+	for ln in cfg.splitlines():
+		if '--verbose' in sys.argv: print(ln)
+		if not ln.startswith('#'): continue
+		if not ln.endswith('is not set'): continue
+		key = ln[1:].strip().split()[0]
+		p[key] = False
+	return p
 
 def mklinux():
 	## https://risc-v-getting-started-guide.readthedocs.io/en/latest/linux-qemu.html
 	## https://github.com/riscv-collab/riscv-gnu-toolchain/issues/825
+	## https://github.com/ayushbansal323/riscv64-sample
 	if not os.path.isfile('/usr/bin/riscv64-linux-gnu-gcc'):
 		if 'fedora' in os.uname().nodename:
 			os.system('sudo dnf install gcc-riscv64-linux-gnu')
@@ -178,7 +197,7 @@ def mklinux():
 	guaca.print_asm( '\n'.join(info['asm']) )
 	d = asm2json(info['asm'])
 
-	kernel = './linux/arch/riscv/boot/Image.gz'
+	kernel = './linux/arch/riscv/boot/Image'
 	assert os.path.isfile(kernel)
 	subprocess.check_call(['ls', '-lh', kernel])
 
@@ -195,6 +214,7 @@ def mklinux():
 	subprocess.check_call(cmd)
 
 	os.system('ldd /tmp/root/init')
+	os.system('riscv64-linux-gnu-readelf -S /tmp/root/init')
 	cmd = 'cd /tmp/root/ && find . | cpio --create --format=newc | gzip > /tmp/root.cpio.gz'
 	print(cmd)
 	os.system(cmd)
@@ -203,16 +223,43 @@ def mklinux():
 		'qemu-system-riscv64',
 		'-M', 'virt',
 		'-m', 'size=1G',
-		#'--nographic',
+		'-serial', 'stdio',
+		'-device', 'VGA',
 		'--no-reboot',
 		'-kernel', kernel,
 		'-initrd', '/tmp/root.cpio.gz',
-		'-append', 'panic=1 console=ttyS0',
-
+		#'-append', 'panic=1 console=ttyS0',
 	]
 	print(cmd)
-	subprocess.check_call(cmd)
+	try:
+		subprocess.check_call(cmd)
+	except:
+		pass
 
+	print('-'*80)
+	cfg = parse_linux_config(open('./linux/.config').read())
+	trace = {'VGA':[], 'RISCV':[], 'VIRT':[]}
+	for n in cfg:
+		print(n, '=', cfg[n])
+		for k in trace:
+			if k in n:
+				trace[k].append('%s=%s' % (n,cfg[n]))
+	for k in trace:
+		print(k)
+		for a in trace[k]:
+			print('\t', a)
+
+	print('-'*80)
+	cfg = parse_linux_not_config(open('./linux/.config').read())
+	trace = {'VGA':[], 'RISCV':[], 'VIRT':[], 'FB_SIMPLE':[]}
+	for n in cfg:
+		for k in trace:
+			if k in n:
+				trace[k].append('%s=%s' % (n,cfg[n]))
+	for k in trace:
+		print(k)
+		for a in trace[k]:
+			print('\t#', a)
 
 def mkbsd():
 	if not os.path.isdir('ghostbsd-src'):
