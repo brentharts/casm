@@ -240,7 +240,7 @@ def mklinux():
 	cfg = parse_linux_config(open('./linux/.config').read())
 	trace = {'VGA':[], 'RISCV':[], 'VIRT':[]}
 	for n in cfg:
-		print(n, '=', cfg[n])
+		if '--verbose' in sys.argv: print(n, '=', cfg[n])
 		for k in trace:
 			if k in n:
 				trace[k].append('%s=%s' % (n,cfg[n]))
@@ -266,6 +266,10 @@ def mkbsd():
 		cmd = 'git clone --depth 1 https://github.com/ghostbsd/ghostbsd-src.git'.split()
 		print(cmd)
 		subprocess.check_call(cmd)
+	includes = ['./ghostbsd-src/include', './ghostbsd-src/sys/riscv/include', './ghostbsd-src/tools/build/cross-build/include/common']
+	trapc = './ghostbsd-src/sys/riscv/riscv/trap.c'
+	asm = guaca.c2asm(open(trapc).read(), {}, [], includes=includes )
+	guaca.print_asm(asm)
 
 if __name__ == '__main__':
 	out = None
