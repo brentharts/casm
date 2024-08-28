@@ -266,7 +266,34 @@ def mkbsd():
 		cmd = 'git clone --depth 1 https://github.com/ghostbsd/ghostbsd-src.git'.split()
 		print(cmd)
 		subprocess.check_call(cmd)
-	includes = ['./ghostbsd-src/include', './ghostbsd-src/sys/riscv/include', './ghostbsd-src/tools/build/cross-build/include/common']
+	includes = [
+		'./ghostbsd-src/include', 
+		'./ghostbsd-src/sys/riscv/include', 
+		'./ghostbsd-src/tools/build/cross-build/include/common',
+		#'./ghostbsd-src/sys',        ## sys/param.h
+		#'./ghostbsd-src/sys/riscv/include',  ## machine/_types.h
+		'./ghostbsd-src/tools/build/cross-build/include/common/sys',
+	]
+	defines = [
+		'_KERNEL',
+		'LOCORE',
+	]
+
+
+	# fatal error: opt_ddb.h: No such file or directory
+	# see ghostbsd-src/sys/modules/dcons/Makefile
+	open('/tmp/opt_ddb.h','w').write('#define DDB 1')
+	open('/tmp/opt_kdb.h','w').write('#define KDB 1')
+	includes.append('/tmp')
+
+	if not os.path.isdir('/tmp/sys'):
+		os.mkdir('/tmp/sys')
+	if not os.path.isdir('/tmp/machine'):
+		os.mkdir('/tmp/machine')
+	os.system('ls -lh ./ghostbsd-src/sys/riscv/include/')
+	os.system('cp -v ./ghostbsd-src/sys/riscv/include/param.h /tmp/sys/.')
+	os.system('cp -v ./ghostbsd-src/sys/riscv/include/_align.h /tmp/machine/.')
+
 	trapc = './ghostbsd-src/sys/riscv/riscv/trap.c'
 	asm = guaca.c2asm(open(trapc).read(), {}, [], includes=includes )
 	guaca.print_asm(asm)
