@@ -274,9 +274,16 @@ KTRACE_H = '''
 
 '''
 
-def c2o(file, out='/tmp/c2o.o', includes=None, defines=None, opt='-O0' ):
-	cmd = [
-		guaca.GCC, '-mcmodel=medany', '-fomit-frame-pointer', '-ffunction-sections',
+def c2o(file, out='/tmp/c2o.o', includes=None, defines=None, opt='-O0', bits=64 ):
+	cmd = [guaca.GCC]
+	if bits==64: pass
+	else:
+		#gcc = 'riscv32-linux-gnu-gcc'
+		cmd.append('-march=rv32i')
+		cmd.append('-mabi=ilp32')
+
+	cmd += [
+		'-mcmodel=medany', '-fomit-frame-pointer', '-ffunction-sections',
 		'-ffreestanding', '-nostdlib', '-nostartfiles', '-nodefaultlibs', '-fno-tree-loop-distribute-patterns', 
 		#'-fno-optimize-register-move', '-fno-sched-pressure', '-fno-sched-interblock',
 		'-ffixed-t0', '-ffixed-t1', '-ffixed-t2', '-ffixed-t3', '-ffixed-t4', '-ffixed-t5', '-ffixed-t6',
@@ -364,12 +371,44 @@ def mkretro():
 		subprocess.check_call(cmd)
 
 	os.system('ls -lh ./retrobsd')
+	defines = ['KERNEL']
+	includes = [
+		#'./retrobsd/include'
+		'/tmp/retro'
+	]
+	open('/tmp/retro/conf.h', 'w').write('//TODO')
+	open('/tmp/retro/time.h', 'w').write('//TODO')
 
-	includes = ['./retrobsd/include']
+	if not os.path.isdir('/tmp/retro'):
+		os.mkdir('/tmp/retro')
+	if not os.path.isdir('/tmp/retro/sys'):
+		os.mkdir('/tmp/retro/sys')
+	if not os.path.isdir('/tmp/retro/machine'):
+		os.mkdir('/tmp/retro/machine')
+	for h in 'param signal types select systm map user dir exec exec_aout time resource errno proc inode vm vmparam vmmac vmmeter vmsystm file fcntl wait kernel'.split():
+		os.system('cp -v ./retrobsd/include/sys/%s.h /tmp/retro/sys/.' % h)
+
+	for h in 'machparam io elf_machdep'.split():
+		os.system('cp -v ./retrobsd/include/machine/%s.h /tmp/retro/machine/.' % h)
+
+	## $NetBSD: exec_elf.h,v 1.37.4.1 2000/07/26 23:57:06 mycroft Exp $
+	h = 'exec_elf'
+	os.system('cp -v ./retrobsd/sys/include/%s.h /tmp/retro/.' % h)
+
 	for name in os.listdir('./retrobsd/sys/kernel/'):
 		assert name.endswith('.c')
-		o = c2o(os.path.join('./retrobsd/sys/kernel', name), includes=includes)
+		if 'kern_exit' not in name: continue
+		print(name)
+		o = c2o(os.path.join('./retrobsd/sys/kernel', name), includes=includes, defines=defines, bits=32)
 		sys.exit()
+
+def mkx44():
+	## https://github.com/TheSledgeHammer/2.11BSD_X44.git
+	if not os.path.isdir('./2.11BSD_X44'):
+		cmd = 'git clone --depth 1 https://github.com/TheSledgeHammer/2.11BSD_X44.git'.split()
+		print(cmd)
+		subprocess.check_call(cmd)
+
 
 if __name__ == '__main__':
 	out = None
@@ -396,6 +435,8 @@ if __name__ == '__main__':
 		print('no .c input files')
 		if '--retro' in sys.argv:
 			mkretro()
+		elif '--x44' in sys.argv:
+			mkx44()
 		elif '--bsd' in sys.argv:
 			mkbsd()
 		else:
