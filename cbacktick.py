@@ -353,6 +353,24 @@ def mkbsd():
 	ctx_switch = './ghostbsd-src/sys/riscv/riscv/swtch.S'
 	guaca.print_asm(ctx_switch)
 
+def mkretro():
+	## https://www.reddit.com/r/RISCV/comments/o8vvuy/linux_for_riscv32/
+	## https://github.com/RetroBSD/retrobsd/issues/87
+	## https://github.com/espressif/qemu/releases
+	## https://github.com/RetroBSD/retrobsd.git
+	if not os.path.isdir('retrobsd'):
+		cmd = 'git clone --depth 1 https://github.com/RetroBSD/retrobsd.git'.split()
+		print(cmd)
+		subprocess.check_call(cmd)
+
+	os.system('ls -lh ./retrobsd')
+
+	includes = ['./retrobsd/include']
+	for name in os.listdir('./retrobsd/sys/kernel/'):
+		assert name.endswith('.c')
+		o = c2o(os.path.join('./retrobsd/sys/kernel', name), includes=includes)
+		sys.exit()
+
 if __name__ == '__main__':
 	out = None
 	c = None
@@ -376,7 +394,9 @@ if __name__ == '__main__':
 
 	if not c:
 		print('no .c input files')
-		if '--bsd' in sys.argv:
+		if '--retro' in sys.argv:
+			mkretro()
+		elif '--bsd' in sys.argv:
 			mkbsd()
 		else:
 			mklinux()
