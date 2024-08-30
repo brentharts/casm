@@ -283,7 +283,7 @@ def c2o(file, out='/tmp/c2o.o', includes=None, defines=None, opt='-O0', bits=64 
 		cmd.append('-mabi=ilp32')
 
 	cmd += [
-		'-mcmodel=medany', '-fomit-frame-pointer', '-ffunction-sections',
+		'-c', '-mcmodel=medany', '-fomit-frame-pointer', '-ffunction-sections',
 		'-ffreestanding', '-nostdlib', '-nostartfiles', '-nodefaultlibs', '-fno-tree-loop-distribute-patterns', 
 		#'-fno-optimize-register-move', '-fno-sched-pressure', '-fno-sched-interblock',
 		'-ffixed-t0', '-ffixed-t1', '-ffixed-t2', '-ffixed-t3', '-ffixed-t4', '-ffixed-t5', '-ffixed-t6',
@@ -366,7 +366,7 @@ def mkretro():
 	## https://github.com/espressif/qemu/releases
 	## https://github.com/RetroBSD/retrobsd.git
 	if not os.path.isdir('retrobsd'):
-		cmd = 'git clone --depth 1 https://github.com/RetroBSD/retrobsd.git'.split()
+		cmd = 'git clone --depth 1 https://github.com/brentharts/retrobsd.git'.split()
 		print(cmd)
 		subprocess.check_call(cmd)
 
@@ -400,7 +400,9 @@ def mkretro():
 		if 'kern_exit' not in name: continue
 		print(name)
 		o = c2o(os.path.join('./retrobsd/sys/kernel', name), includes=includes, defines=defines, bits=32)
-		sys.exit()
+		info = decomp( o )
+		print_regs(info['sections'])
+		guaca.print_asm( '\n'.join(info['asm']) )
 
 def mkx44():
 	## https://github.com/TheSledgeHammer/2.11BSD_X44.git
